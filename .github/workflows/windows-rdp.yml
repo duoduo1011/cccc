@@ -15,39 +15,37 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 0
 
-      - name: 1.5 Install Chinese Language (登录即中文)
+      - name: 1.5 Install Chinese Language Offline (登录即中文)
         shell: powershell
         run: |
-          Write-Host ">>> 第1步：尝试在线安装中文语言包（最多等5分钟）..." -ForegroundColor Yellow
-          $job = Start-Job { Install-Language zh-CN -ErrorAction Stop }
-          if (Wait-Job $job -Timeout 300) {
-            Receive-Job $job
-            Write-Host ">>> 在线安装成功！" -ForegroundColor Green
-          } else {
-            Stop-Job $job -ErrorAction SilentlyContinue
-            Write-Host ">>> 在线安装失败，改用离线ISO方案（下载6.4G，请耐心）..." -ForegroundColor Red
-            $isoPath = "C:\langpack.iso"
-            if (-not (Test-Path $isoPath)) {
-              curl.exe -L -o $isoPath "https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1.240331-1435.ge_release_amd64fre_SERVER_LOF_PACKAGES_OEM.iso"
-            }
-            $mount = Mount-DiskImage -ImagePath $isoPath -PassThru
-            $drive = (($mount | Get-Volume).DriveLetter) + ":"
-            $cab = Get-ChildItem "$drive\LanguagesAndOptionalFeatures\" -Filter "*zh-cn*.cab" -ErrorAction SilentlyContinue |
-                   Where-Object { $_.Name -like "*Language-Pack*" } | Select-Object -First 1
-            if (-not $cab) { $cab = Get-ChildItem "$drive\LanguagesAndOptionalFeatures\" -Filter "*zh-cn*.cab" | Select-Object -First 1 }
-            dism /online /add-package /packagepath:"$($cab.FullName)"
-            Write-Host ">>> 离线安装完成！" -ForegroundColor Green
+          Write-Host ">>> [1/4] 下载中文语言包ISO（6.4G，耐心等待）..." -ForegroundColor Yellow
+          $isoPath = "C:\langpack.iso"
+          if (-not (Test-Path $isoPath)) {
+            curl.exe -L -o $isoPath "https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1.240331-1435.ge_release_amd64fre_SERVER_LOF_PACKAGES_OEM.iso"
           }
+          Write-Host ">>> [2/4] 挂载ISO并查找中文语言包..." -ForegroundColor Yellow
+          $mount = Mount-DiskImage -ImagePath $isoPath -PassThru
+          $drive = (($mount | Get-Volume).DriveLetter) + ":"
+          $cab = Get-ChildItem "$drive\LanguagesAndOptionalFeatures\" -Filter "*zh-cn*.cab" -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Name -like "*Language-Pack*" } | Select-Object -First 1
+          if (-not $cab) { $cab = Get-ChildItem "$drive\LanguagesAndOptionalFeatures\" -Filter "*zh-cn*.cab" | Select-Object -First 1 }
+          Write-Host "    找到: $($cab.Name)" -ForegroundColor Green
+          Write-Host ">>> [3/4] 安装语言包（带进度条）..." -ForegroundColor Yellow
+          dism /online /add-package /packagepath:"$($cab.FullName)"
+          Write-Host ">>> [4/4] 设置默认用户语言（新用户登录即中文）..." -ForegroundColor Yellow
           Set-WinUILanguageOverride -Language zh-CN
           Set-Culture zh-CN
-          Write-Host ">>> 显示语言已设为中文，登录即中文界面" -ForegroundColor Green
+          reg load "HKU\DefUser" "C:\Users\Default\NTUSER.DAT" | Out-Null
+          reg add "HKU\DefUser\Control Panel\Desktop" /v PreferredUILanguages /t REG_SZ /d "zh-CN" /f
+          reg unload "HKU\DefUser" | Out-Null
+          Write-Host ">>> 中文设置完成！xxx123登录即中文界面" -ForegroundColor Green
 
       - name: 2. Create Admin Account
         shell: powershell
         run: |
-          $Password = ConvertTo-SecureString "P@ssw0rd1qazXSW@#" -AsPlainText -Force
-          New-LocalUser -Name "NvdAdmin" -Password $Password -PasswordNeverExpires -ErrorAction SilentlyContinue
-          Add-LocalGroupMember -Group "Administrators" -Member "NvdAdmin" -ErrorAction SilentlyContinue
+          $Password = ConvertTo-SecureString "Qq23456" -AsPlainText -Force
+          New-LocalUser -Name "xxx123" -Password $Password -PasswordNeverExpires -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Administrators" -Member "xxx123" -ErrorAction SilentlyContinue
           net user runneradmin P@ssw0rd1qazXSW@#
 
       - name: 3. Install & Connect Tailscale VPN
@@ -65,8 +63,8 @@ jobs:
           Write-Host "==========================================" -ForegroundColor Green
           Write-Host "  >>> RDP SERVER IS READY! <<<" -ForegroundColor Cyan
           Write-Host "  Tailscale IP : $ts_ip" -ForegroundColor Yellow
-          Write-Host "  Username     : NvdAdmin" -ForegroundColor Yellow
-          Write-Host "  Password     : P@ssw0rd1qazXSW@#" -ForegroundColor Yellow
+          Write-Host "  Username     : xxx123" -ForegroundColor Yellow
+          Write-Host "  Password     : Qq23456" -ForegroundColor Yellow
           Write-Host "  >> Open mstsc and connect to: $ts_ip" -ForegroundColor Magenta
           Write-Host "  >> 界面已设置为中文，登录即中文" -ForegroundColor Magenta
           Write-Host "==========================================" -ForegroundColor Green
